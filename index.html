@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c0607">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Una micro app para apagar la cabeza antes de dormir: gira, respira, imagina y suelta.">
+<meta property="og:title" content="Apaga la Cabeza">
+<meta property="og:description" content="Gira, respira, imagina y suelta. Para cuando la mente no se calla.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+<title>Apaga la Cabeza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Figtree:wght@400;500&display=swap">
+<style>
+/* Layout: el disco ocupa toda la pantalla detrás; viñeta oscura y desaturada que se cierra con el tiempo; controles flotan arriba y abajo. Solo-oscuro a propósito. */
+:root{
+  --noche:#0c0607; --brasa:#d64856; --ceniza:#8c5f62; --vela:#f0d4d0; --humo:#221014; --borde:#3a1d22;
+  --display:"Instrument Serif", Georgia, serif; --body:"Figtree", system-ui, sans-serif;
+  --vin:72%;  /* radio libre de la viñeta; se achica con el tiempo */
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--noche);color:var(--vela);font-family:var(--body);overflow:hidden;margin:0;
+  -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;z-index:0}
+/* viñeta: primero quita el color hacia los bordes, luego oscurece */
+.vin{position:fixed;inset:0;pointer-events:none;z-index:1;transition:--vin 8s}
+#gris{backdrop-filter:grayscale(1) brightness(.75);-webkit-backdrop-filter:grayscale(1) brightness(.75);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent calc(var(--vin)*.45),#000 var(--vin));
+  mask-image:radial-gradient(circle at 50% 50%,transparent calc(var(--vin)*.45),#000 var(--vin))}
+#negro{background:radial-gradient(circle at 50% 50%,transparent calc(var(--vin)*.55),color-mix(in srgb,var(--noche) 70%,transparent) calc(var(--vin)*.95),var(--noche) calc(var(--vin)*1.35))}
+#app{position:fixed;inset:0;z-index:2;display:grid;grid-template-rows:auto 1fr auto;pointer-events:none;
+  max-width:520px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);transition:opacity 4s linear}
+header,nav,#soltar-box,#nota{pointer-events:auto}
+header{display:flex;align-items:center;justify-content:space-between;padding-block:14px 0;gap:12px}
+h1{font-family:var(--display);font-weight:400;font-size:22px;margin:0;color:var(--brasa)}
+h1 i{color:var(--ceniza)}
+.chip{background:var(--humo);color:var(--ceniza);border:1px solid var(--borde);border-radius:999px;font:500 12px var(--body);padding:7px 12px;letter-spacing:.04em;cursor:pointer}
+.chip[aria-pressed="true"]{color:var(--brasa);border-color:var(--brasa)}
+.chip:focus-visible,.modo:focus-visible,#soltar-in:focus-visible{outline:1px solid var(--brasa);outline-offset:2px}
+main{position:relative;min-height:0}
+#texto{position:absolute;left:0;right:0;bottom:6%;text-align:center;min-height:3.2em}
+#grande{font-family:var(--display);font-size:clamp(30px,8.5vw,42px);line-height:1.1;transition:opacity 1.6s ease;text-wrap:balance;text-shadow:0 0 24px var(--noche)}
+#chico{color:var(--ceniza);font-size:13px;margin-top:6px;letter-spacing:.03em;transition:opacity 1.6s}
+#soltar-box{position:absolute;left:0;right:0;bottom:4%;display:none;flex-direction:column;align-items:center;gap:8px}
+#soltar-in{width:100%;max-width:360px;box-sizing:border-box;background:var(--humo);border:1px solid var(--borde);border-radius:14px;color:var(--vela);font:400 16px var(--body);padding:13px 15px}
+#soltar-in::placeholder{color:var(--ceniza)}
+.flota{position:absolute;font-family:var(--display);font-size:22px;color:var(--vela);pointer-events:none;transition:transform 6s cubic-bezier(.2,.6,.3,1),opacity 6s ease,filter 6s;white-space:nowrap}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding-block:8px 18px}
+.modo{background:none;border:0;color:var(--ceniza);font:500 12px var(--body);letter-spacing:.08em;text-transform:uppercase;padding:10px 0;cursor:pointer;border-top:1px solid var(--borde)}
+.modo span{display:block;font:italic 400 13px var(--display);letter-spacing:0;text-transform:none;opacity:.7;margin-top:2px}
+.modo[aria-selected="true"]{color:var(--brasa);border-top-color:var(--brasa)}
+#duerme{position:fixed;left:0;right:0;top:46%;transform:translateY(-50%);text-align:center;z-index:1;pointer-events:none;opacity:0;
+  font:italic 400 clamp(44px,14vw,72px) var(--display);color:var(--vela);letter-spacing:.02em;
+  text-shadow:-3px 0 rgba(255,80,70,.7),3px 0 rgba(255,190,110,.6),0 0 30px var(--brasa)}
+#tono{width:26px;height:26px;padding:0;border-radius:50%;background:var(--brasa);border:2px solid var(--borde);cursor:pointer;flex:none}
+#tono:focus-visible{outline:1px solid var(--vela);outline-offset:2px}
+header>div{flex-wrap:wrap;justify-content:flex-end;align-items:center}
+header button,#sub .chip{opacity:1;transition:opacity .5s ease}
+body.reposo header button,body.reposo #sub .chip{opacity:.2;transition:opacity 2.8s ease}
+body.reposo header button:focus-visible,body.reposo #sub .chip:focus-visible{opacity:1}
+#sub{position:absolute;top:10px;left:0;right:0;display:flex;justify-content:center;gap:6px;pointer-events:auto}
+#nota{color:var(--ceniza);opacity:.6;font-size:11px;text-align:center;padding-bottom:4px}
+@media (prefers-reduced-motion:reduce){.flota,#grande,#chico{transition:none}}
+</style>
+</head>
+<body>
+
+
+<canvas id="c" aria-label="Disco para girar con el dedo"></canvas>
+<div id="duerme" aria-hidden="true">duerme</div>
+<div class="vin" id="gris"></div>
+<div class="vin" id="negro"></div>
+
+<div id="app">
+  <header>
+    <h1>Apaga <i>la</i> Cabeza</h1>
+    <div style="display:flex;gap:6px">
+      <button id="tono" aria-label="Cambiar tono de color"></button>
+      <button class="chip" id="vozbtn">voz</button>
+      <button class="chip" id="ruido" aria-pressed="false">ruido</button>
+      <button class="chip" id="click" aria-pressed="true">clics</button>
+    </div>
+  </header>
+  <main>
+    <div id="sub" hidden><button class="chip" id="t-escena" aria-pressed="true">escena guiada</button><button class="chip" id="t-palabras" aria-pressed="false">palabras sueltas</button></div>
+    <div id="texto"><div id="grande"></div><div id="chico"></div></div>
+    <div id="soltar-box">
+      <input id="soltar-in" maxlength="80" placeholder="escribe lo que te da vueltas…" autocomplete="off">
+      <div id="chico2" style="color:var(--ceniza);font-size:12px">enter y se va</div>
+    </div>
+  </main>
+  <div>
+    <div id="nota">la pantalla se apaga sola en 20 min · el ruido baja en 30</div>
+    <nav role="tablist">
+      <button class="modo" role="tab" data-m="girar" aria-selected="true">Girar<span>para las manos</span></button>
+      <button class="modo" role="tab" data-m="respirar" aria-selected="false">Respirar<span>con voz, 4 y 6</span></button>
+      <button class="modo" role="tab" data-m="escena" aria-selected="false">Imaginar<span>ojos cerrados</span></button>
+      <button class="modo" role="tab" data-m="soltar" aria-selected="false">Soltar<span>vacía la cabeza</span></button>
+    </nav>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+/* ---------- tonos: todos sin luz azul ---------- */
+const TEMAS={
+ rubi:{nombre:'rubí',acc:'214,72,86',vela:'240,212,208',glow:'255,190,190',deep:'110,20,35',css:{noche:'#0c0607',brasa:'#d64856',ceniza:'#8c5f62',vela:'#f0d4d0',humo:'#221014',borde:'#3a1d22'}},
+ laton:{nombre:'latón',acc:'201,164,92',vela:'238,226,200',glow:'255,236,190',deep:'110,80,30',css:{noche:'#0b0906',brasa:'#c9a45c',ceniza:'#87785c',vela:'#eee2c8',humo:'#1e1a12',borde:'#362e1f'}},
+ rosa:{nombre:'rosa noche',acc:'214,128,150',vela:'242,218,222',glow:'255,210,220',deep:'120,40,70',css:{noche:'#0c0709',brasa:'#d68096',ceniza:'#8d6a72',vela:'#f2dade',humo:'#221418',borde:'#3b2329'}},
+ vino:{nombre:'vino',acc:'150,52,70',vela:'228,200,200',glow:'240,170,170',deep:'80,15,25',css:{noche:'#080405',brasa:'#963446',ceniza:'#7a4c52',vela:'#e4c8c8',humo:'#1a0b0e',borde:'#30151a'}}
+};
+let temaId='rubi';try{temaId=localStorage.getItem('apaga-tono')||'rubi'}catch(e){}
+if(!TEMAS[temaId])temaId='rubi';let P=TEMAS[temaId];
+function aplicarTema(id){temaId=id;P=TEMAS[id];const r=document.documentElement.style;for(const k in P.css)r.setProperty('--'+k,P.css[k]);
+  const b=document.getElementById('tono');if(b)b.title='tono: '+P.nombre;try{localStorage.setItem('apaga-tono',id)}catch(e){}}
+aplicarTema(temaId);
+
+const cv=$('#c'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(2,devicePixelRatio||1);
+function size(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',size);size();
+const cx=()=>W/2, cy=()=>H*.46;
+
+/* ---------- audio ---------- */
+let ac=null,noiseGain=null,clicksOn=true;
+/* iPhone: el audio web respeta el botón de silencio. Pedimos sesión de "reproducción" (como un reproductor de música)
+   y, por si el navegador no lo soporta, mantenemos un <audio> mudo en bucle que fuerza el mismo modo. */
+let desbloqueado=false,mudo=null;
+function silencioWav(){const sr=8000,n=sr/2,b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  return URL.createObjectURL(new Blob([b],{type:'audio/wav'}))}
+function desbloquear(){if(desbloqueado)return;desbloqueado=true;
+  try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+  try{mudo=document.createElement('audio');mudo.setAttribute('playsinline','');mudo.loop=true;mudo.src=silencioWav();mudo.volume=.01;
+    const p=mudo.play();if(p&&p.catch)p.catch(()=>{desbloqueado=false})}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&mudo&&mudo.paused){try{mudo.play().catch(()=>{})}catch(e){}}});
+let lock=null;
+async function pedirLock(){try{if('wakeLock' in navigator&&!lock&&!document.hidden){lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>{lock=null})}}catch(e){lock=null}}
+function soltarLock(){try{lock&&lock.release()}catch(e){}lock=null}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(Date.now()-lastWake)<32*60000)pedirLock()});
+function audio(){desbloquear();pedirLock();if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)()}if(ac.state==='suspended'||ac.state==='interrupted')ac.resume();return ac}
+function tick(v){if(!clicksOn)return;const a=audio(),o=a.createOscillator(),g=a.createGain();
+  o.type='sine';o.frequency.value=180+Math.random()*30;
+  g.gain.setValueAtTime(Math.min(.05,.012+v*.01),a.currentTime);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.06);
+  o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.07)}
+function brown(){const a=audio(),len=a.sampleRate*4,b=a.createBuffer(1,len,a.sampleRate),d=b.getChannelData(0);let last=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+.02*w)/1.02;d[i]=last*3.2}
+  const s=a.createBufferSource();s.buffer=b;s.loop=true;noiseGain=a.createGain();noiseGain.gain.value=0;
+  const lp=a.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;s.connect(lp).connect(noiseGain).connect(a.destination);s.start()}
+$('#ruido').onclick=e=>{const on=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',on);
+  if(!noiseGain)brown();const a=audio();noiseGain.gain.cancelScheduledValues(a.currentTime);
+  noiseGain.gain.setTargetAtTime(on?.35:0,a.currentTime,1.2);if(on)noiseGain.gain.setTargetAtTime(0,a.currentTime+1800,120)};
+$('#tono').onclick=()=>{const ks=Object.keys(TEMAS);aplicarTema(ks[(ks.indexOf(temaId)+1)%ks.length]);if(modo!=='soltar')say(P.nombre,'tono de la noche')};
+$('#vozbtn').onclick=()=>{audio();cambiarVoz()};
+$('#click').onclick=e=>{clicksOn=!clicksOn;e.currentTarget.setAttribute('aria-pressed',clicksOn)};
+
+/* ---------- voz susurrada ---------- */
+const synth=window.speechSynthesis;let voz=null;
+const FEM=/female|mujer|paulina|monica|mónica|sabina|helena|luciana|marisol|paloma|camila/i;
+const QUAL=/enhanced|premium|mejorad|natural|neural|online|google|siri/i;
+let voces=[];
+function elegirVoz(){if(!synth)return;const pref=['es-PE','es-MX','es-US','es-419','es-CO','es-AR','es-ES'];
+  let guardada='';try{guardada=localStorage.getItem('apaga-voz')||''}catch(e){}
+  voces=synth.getVoices().filter(v=>/^es/i.test(v.lang));
+  voces.sort((a,b)=>((b.name===guardada)-(a.name===guardada))||(QUAL.test(b.name)-QUAL.test(a.name))||(FEM.test(b.name)-FEM.test(a.name))||((pref.indexOf(a.lang)+99)%99-(pref.indexOf(b.lang)+99)%99));
+  voz=voces[0]||null;nombreVoz()}
+function nombreVoz(){const b=document.getElementById('vozbtn');if(!b)return;
+  b.textContent=(usarNelly&&vozBuf)?'voz: nelly':voz?'voz: '+voz.name.split(/[ (]/)[0].toLowerCase():'voz'}
+function cambiarVoz(){
+  if(usarNelly&&vozBuf){usarNelly=false;if(!voces.length)elegirVoz();voz=voces[0]||null;if(!voz){usarNelly=true}}
+  else{const i=voces.indexOf(voz);if(vozBuf&&(i<0||i===voces.length-1)){usarNelly=true}else voz=voces[(i+1)%voces.length]}
+  try{localStorage.setItem('apaga-voz',usarNelly?'nelly':(voz?voz.name:''))}catch(e){}
+  nombreVoz();susurrar('así sueno, despacito',.9)}
+/* voz grabada (ElevenLabs): un solo archivo con todos los clips y su mapa de tiempos */
+const CLIPS={"inhala#1": [0.0, 1.127], "suéltalo#1": [1.427, 0.961], "inhala#2": [2.688, 0.977], "suéltalo#2": [3.965, 0.962], "duerme#1": [5.227, 0.833], "duerme#2": [6.36, 1.222], "así sueno, despacito": [7.882, 2.192], "cierra los ojos": [10.374, 1.414], "estás en un bosque": [12.088, 1.476], "los árboles son altos": [13.864, 2.096], "la luz entra entre las hojas": [16.26, 2.357], "huele a tierra mojada": [18.918, 1.726], "a lo lejos suena un río": [20.944, 2.052], "caminas despacio": [23.296, 1.641], "el suelo es blando": [25.236, 1.704], "hay musgo verde en las piedras": [27.24, 2.134], "un pájaro canta, una vez": [29.673, 2.3], "llegas a un claro": [32.273, 1.422], "el pasto es suave": [33.995, 1.705], "te recuestas": [36.0, 1.202], "el sol te calienta la cara": [37.502, 1.947], "a lo lejos ves una casa de madera": [39.749, 2.415], "sale humo de la chimenea": [42.464, 1.863], "te acercas sin apuro": [44.627, 1.753], "la puerta está abierta": [46.68, 1.851], "adentro está tibio": [48.831, 1.741], "hay una manta sobre el sillón": [50.872, 1.86], "la leña cruje": [53.032, 1.504], "afuera empieza a llover": [54.837, 1.843], "las gotas suenan en el techo": [56.98, 2.193], "te tapas con la manta": [59.473, 1.537], "todo está en calma": [61.31, 1.59], "ahora estás junto a un lago en la sierra": [63.2, 2.77], "el agua está quieta, como un espejo": [66.27, 2.934], "al fondo hay montañas con nieve": [69.505, 2.443], "una alpaca come pasto": [72.248, 1.908], "el aire es fresco": [74.456, 1.725], "un bote de totora flota": [76.481, 1.931], "el agua apenas se mueve": [78.712, 2.103], "nada te apura": [81.115, 1.289], "ahora estás en una playa": [82.704, 1.926], "la arena está tibia": [84.93, 1.865], "las olas van y vienen": [87.095, 2.144], "el cielo se pone naranja": [89.539, 1.916], "una brisa suave": [91.755, 1.457], "huele a sal": [93.512, 1.104], "las olas siguen": [94.916, 1.426], "van": [96.642, 0.771], "y vienen": [97.714, 0.888], "más despacio": [98.902, 1.107], "w:vela": [100.309, 0.817], "w:pan": [101.426, 0.677], "w:bote": [102.403, 0.828], "w:lluvia": [103.531, 0.887], "w:cuchara": [104.718, 0.849], "w:nube": [105.867, 0.773], "w:gato": [106.94, 0.838], "w:piano": [108.078, 0.75], "w:mango": [109.129, 0.873], "w:faro": [110.302, 0.765], "w:llave": [111.367, 0.78], "w:manta": [112.447, 0.867], "w:hoja": [113.614, 0.704], "w:taza": [114.618, 0.708], "w:río": [115.626, 0.793], "w:cometa": [116.719, 0.852], "w:tambor": [117.871, 0.836], "w:pluma": [119.007, 0.723], "w:limón": [120.029, 0.852], "w:escalera": [121.182, 0.981], "w:campana": [122.462, 0.915], "w:arena": [123.678, 0.798], "w:zapato": [124.775, 0.96], "w:ventana": [126.035, 0.953], "w:caracol": [127.288, 0.912], "w:tren": [128.5, 0.69], "w:uva": [129.49, 0.675], "w:brújula": [130.465, 0.927], "w:jabón": [131.692, 0.89], "w:montaña": [132.882, 1.007], "w:lápiz": [134.19, 0.922], "w:abeja": [135.412, 0.844], "w:tortuga": [136.556, 0.913], "w:globo": [137.768, 0.828], "w:canasta": [138.897, 0.903], "w:hamaca": [140.099, 0.901], "w:huevo": [141.3, 0.764], "w:reloj": [142.365, 0.826], "w:búho": [143.491, 0.756], "w:maceta": [144.547, 0.937], "w:violín": [145.784, 0.909], "w:ancla": [146.993, 0.802], "w:choclo": [148.095, 0.789], "w:palta": [149.184, 0.738], "w:alpaca": [150.222, 0.915], "w:muelle": [151.437, 0.822], "w:nido": [152.558, 0.777], "w:tiza": [153.635, 0.697], "w:acordeón": [154.633, 0.991], "w:fresa": [155.924, 0.813], "w:sombrero": [157.037, 0.975], "w:cebolla": [158.312, 0.926], "w:bicicleta": [159.538, 1.026], "w:sol": [160.864, 0.778], "w:piedra": [161.942, 0.745], "w:carpa": [162.987, 0.764], "w:ola": [164.051, 0.678], "w:pera": [165.029, 0.654], "w:bufanda": [165.983, 0.969], "w:linterna": [167.253, 0.981]};
+let vozBuf=null,usarNelly=true,clipSrc=null,vozBus=null;
+try{usarNelly=(localStorage.getItem('apaga-voz')||'nelly')==='nelly'}catch(e){}
+async function cargarVoz(){try{if(!ac)ac=new (window.AudioContext||window.webkitAudioContext)();
+  const r=await fetch('voz.mp3');if(!r.ok)throw 0;vozBuf=await ac.decodeAudioData(await r.arrayBuffer());nombreVoz()}catch(e){vozBuf=null;nombreVoz()}}
+function bus(){if(vozBus)return vozBus;const a=audio(),dry=a.createGain(),cv=a.createConvolver(),wet=a.createGain();
+  const len=a.sampleRate*1.8,ir=a.createBuffer(2,len,a.sampleRate);
+  for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)}
+  cv.buffer=ir;wet.gain.value=.16;dry.connect(a.destination);dry.connect(cv);cv.connect(wet).connect(a.destination);return vozBus=dry}
+function clave(txt){if(CLIPS[txt])return txt;if(CLIPS['w:'+txt])return 'w:'+txt;
+  const v=[txt+'#1',txt+'#2'].filter(k=>CLIPS[k]);return v.length?v[Math.random()*v.length|0]:null}
+function tocarClip(k,vol){const a=audio(),[off,dur]=CLIPS[k];try{clipSrc&&clipSrc.stop()}catch(e){}
+  const s=a.createBufferSource(),g=a.createGain();s.buffer=vozBuf;g.gain.value=Math.min(1.4,vol*1.25);
+  s.connect(g).connect(bus());s.start(a.currentTime+.03,off,dur);clipSrc=s}
+cargarVoz();
+if(synth){elegirVoz();synth.onvoiceschanged=elegirVoz}
+function soplo(vol,dur){const a=audio(),len=a.sampleRate*(dur||1.6),b=a.createBuffer(1,len,a.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.sin(Math.PI*i/len);
+  const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();s.buffer=b;f.type='bandpass';f.frequency.value=2200;f.Q.value=.7;
+  g.gain.value=.045*vol;s.connect(f).connect(g).connect(a.destination);s.start()}
+function susurrar(txt,vol){
+  if(usarNelly&&vozBuf){const k=clave(txt);if(k){try{synth&&synth.cancel()}catch(e){}tocarClip(k,vol);return}}
+  if(!synth)return;synth.cancel();soplo(vol);
+  setTimeout(()=>{const u=new SpeechSynthesisUtterance(txt);if(voz)u.voice=voz;u.lang=voz?voz.lang:'es-PE';
+    u.rate=.6;u.pitch=.55;u.volume=vol;synth.speak(u)},250)}
+
+/* ---------- disco ---------- */
+let respFase=0,respT0=0,respDur=4000;
+let carga=0,hipHasta=0;
+let holo=0,hyp=0,rapido=0,ultDuerme=0;const tunel=[];const duermeEl=document.getElementById('duerme');
+let ang=0,vel=.002,drag=false,lastA=0,lastT=0,segPrev=0,scale=1,targetScale=1;
+const SEG=24;
+function angAt(e){return Math.atan2(e.clientY-cy(),e.clientX-cx())}
+cv.addEventListener('pointerdown',e=>{drag=true;cv.setPointerCapture(e.pointerId);lastA=angAt(e);lastT=performance.now();vel=0;audio();wake()});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const a=angAt(e),t=performance.now();let d=a-lastA;
+  if(d>Math.PI)d-=2*Math.PI;if(d<-Math.PI)d+=2*Math.PI;ang+=d;vel=d/Math.max(8,t-lastT)*16;lastA=a;lastT=t});
+cv.addEventListener('pointerup',()=>drag=false);cv.addEventListener('pointercancel',()=>drag=false);
+
+function draw(t){
+  if(!drag){ang+=vel;vel*=.988;if(Math.abs(vel)<.0015)vel=vel<0?-.0015:.0015}
+  const seg=Math.floor(ang/(2*Math.PI/SEG));if(seg!==segPrev){tick(Math.abs(vel));segPrev=seg}
+  let rp=-1;
+  if(modo==='respirar'&&respT0){rp=Math.min(1,(performance.now()-respT0)/respDur);const e=.5-.5*Math.cos(rp*Math.PI);
+    scale=respFase===0?.82+.32*e:1.14-.32*e}
+  else scale+=(targetScale-scale)*.03;
+  const c1=cx(),c2=cy(),R=Math.min(W,H)*.34*scale;
+  const sp=Math.max(0,Math.min(1,(Math.abs(vel)-.04)*3.5));     // el holograma solo aparece al girar con ganas
+  holo+=(sp-holo)*(sp>holo?.05:.012);const h=holo;
+  ctx.globalCompositeOperation='source-over';ctx.clearRect(0,0,W,H);
+
+  // easter egg: si giras muy rápido por un rato, aparece la espiral hipnótica
+  // carga: suma lo que giras y se vacía sola; unos cuantos giros con ganas la llenan
+  carga=carga*.985+Math.abs(vel);
+  if(carga>8)hipHasta=t+2000;                 // se sostiene 2 s y se va si dejas de girar
+  const enHip=t<hipHasta||carga>6;hyp+=((enHip?1:0)-hyp)*(enHip?.04:.025);
+  if(hyp>.02){const far=Math.hypot(W,H)*.62,b=15;
+    ctx.save();ctx.translate(c1,c2);ctx.rotate(-t*.006);ctx.lineCap='round';
+    const sg=ctx.createRadialGradient(0,0,0,0,0,far);sg.addColorStop(0,`rgba(${P.acc},${.32*hyp})`);sg.addColorStop(1,`rgba(${P.deep},${.16*hyp})`);
+    ctx.strokeStyle=sg;ctx.lineWidth=2.2;
+    for(let arm=0;arm<2;arm++){ctx.beginPath();          // dos brazos finos, como un péndulo de hipnotista
+      for(let th=0;th<far/b;th+=.05){const r=b*th,a=th+arm*Math.PI;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r)}ctx.stroke()}
+    ctx.restore();
+    // la espiral queda detrás: se borra suave donde está el disco
+    ctx.globalCompositeOperation='destination-out';const hole=ctx.createRadialGradient(c1,c2,R*.9,c1,c2,R*1.25);
+    hole.addColorStop(0,'rgba(0,0,0,1)');hole.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=hole;ctx.beginPath();ctx.arc(c1,c2,R*1.25,0,7);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,1)';ctx.beginPath();ctx.arc(c1,c2,R*.9,0,7);ctx.fill();ctx.globalCompositeOperation='source-over'}
+  if(hyp>.5){const ciclo=Math.floor(t/3800),ph=(t%3800)/3800;
+    duermeEl.style.opacity=ph<.22?(Math.sin(ph/.22*Math.PI)*hyp*.9).toFixed(3):0;
+    if(ciclo!==ultDuerme&&ph<.08){ultDuerme=ciclo;susurrar('duerme',.75)}}   // cada vez que aparece, se susurra
+  else if(duermeEl.style.opacity!=='0')duermeEl.style.opacity=0;
+
+  // túnel suave hacia toda la pantalla
+  if(h>.3&&Math.random()<h*.18)tunel.push({r:R*.2,hue:(t*.02)%35});
+  const far=Math.hypot(W,H)*.6;ctx.globalCompositeOperation='lighter';
+  for(let i=tunel.length-1;i>=0;i--){const q=tunel[i];q.r*=1.008+h*.012;const life=1-q.r/far;
+    if(life<=0){tunel.splice(i,1);continue}
+    ctx.strokeStyle=`hsla(${(q.hue+q.r*.03)%50},60%,60%,${life*.16*Math.max(h,.25)})`;ctx.lineWidth=1+life*1.5;
+    ctx.beginPath();ctx.arc(c1,c2,q.r,0,7);ctx.stroke()}
+
+  // halo: ámbar, con un velo pastel al girar
+  const g=ctx.createRadialGradient(c1,c2,R*.1,c1,c2,R*1.6);
+  g.addColorStop(0,`rgba(${P.acc},${.12-h*.04})`);g.addColorStop(.5,`hsla(${10+(t*.02)%35},60%,58%,${h*.08})`);g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(c1,c2,R*1.6,0,7);ctx.fill();
+
+  if(ctx.createConicGradient&&h>.03){const cg=ctx.createConicGradient(-ang*1.5,c1,c2);
+    ['#ff8a7a','#ffc27a','#ff9ec4','#e07a5f','#ffd79a','#ff8a7a'].forEach((col,i,a)=>cg.addColorStop(i/(a.length-1),col));
+    ctx.globalAlpha=h*.1;ctx.fillStyle=cg;ctx.beginPath();ctx.arc(c1,c2,R*.95,0,7);ctx.fill();ctx.globalAlpha=1}
+
+  // aberración cromática sutil
+  const off=h*R*.03;
+  const capas=h<.04?[['rgba('+P.vela+',','rgba('+P.acc+',',0,0]]:[
+    ['rgba(255,80,70,','rgba(255,90,70,',Math.cos(ang*2)*off,Math.sin(ang*2)*off],
+    ['rgba(255,200,130,','rgba(255,190,110,',0,0],
+    ['rgba(235,110,170,','rgba(235,120,170,',-Math.cos(ang*2)*off,-Math.sin(ang*2)*off]];
+  const k=capas.length===1?1:.6;
+  for(const [base,acc,dx,dy] of capas){
+    ctx.save();ctx.translate(c1+dx,c2+dy);ctx.rotate(ang);
+    for(let r=0;r<4;r++){ctx.strokeStyle=base+(.07+r*.025)*k+')';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,R*(.35+r*.2),0,7);ctx.stroke()}
+    for(let i=0;i<SEG;i++){const a=i*2*Math.PI/SEG,big=i%6===0;
+      ctx.strokeStyle=big?acc+.85*k+')':base+.25*k+')';ctx.lineWidth=big?2:1;
+      ctx.beginPath();ctx.moveTo(Math.cos(a)*R*.92,Math.sin(a)*R*.92);ctx.lineTo(Math.cos(a)*R*(big?.78:.86),Math.sin(a)*R*(big?.78:.86));ctx.stroke()}
+    for(let i=0;i<3;i++){const a=i*2*Math.PI/3;ctx.strokeStyle=acc+.5*k+')';
+      ctx.beginPath();ctx.arc(Math.cos(a)*R*.55,Math.sin(a)*R*.55,R*.14,0,7);ctx.stroke()}
+    ctx.restore()}
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=`rgba(${P.acc},${.55+h*.3})`;ctx.beginPath();ctx.arc(c1,c2,R*.07,0,7);ctx.fill();
+
+  // anillo de respiración: se cierra al inhalar, se abre al exhalar
+  if(rp>=0){const RR=Math.min(W,H)*.34*1.22,ini=-Math.PI/2,segs=respDur/1000;
+    const prog=respFase===0?rp:1-rp,fin=ini+prog*2*Math.PI;
+    ctx.lineCap='round';ctx.lineWidth=2;ctx.strokeStyle='rgba('+P.vela+',.08)';ctx.beginPath();ctx.arc(c1,c2,RR,0,7);ctx.stroke();
+    for(let s=0;s<segs;s++){const a=ini+s/segs*2*Math.PI,pas=(respFase===0?rp*segs>s:rp*segs<segs-s);
+      ctx.fillStyle=pas?'rgba('+P.acc+',.8)':'rgba('+P.vela+',.18)';ctx.beginPath();ctx.arc(c1+Math.cos(a)*RR,c2+Math.sin(a)*RR,3,0,7);ctx.fill()}
+    if(prog>.002){ctx.lineWidth=4;ctx.strokeStyle=respFase===0?'rgba('+P.acc+',.9)':'rgba('+P.acc+',.6)';
+      ctx.beginPath();ctx.arc(c1,c2,RR,ini,fin);ctx.stroke();
+      ctx.fillStyle='rgba('+P.glow+',.95)';ctx.beginPath();ctx.arc(c1+Math.cos(fin)*RR,c2+Math.sin(fin)*RR,5,0,7);ctx.fill()}
+    ctx.lineCap='butt'}
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+/* ---------- modos ---------- */
+const grande=$('#grande'),chico=$('#chico');
+let modo='girar',timer=null,modoInicio=0;
+function say(a,b){grande.style.opacity=0;chico.style.opacity=0;setTimeout(()=>{grande.textContent=a;chico.textContent=b||'';grande.style.opacity=1;chico.style.opacity=1},700)}
+function stop(){clearTimeout(timer);targetScale=1;respT0=0;try{clipSrc&&clipSrc.stop()}catch(e){}try{synth&&synth.cancel()}catch(e){}}
+const minutos=()=>(Date.now()-modoInicio)/60000;
+const volumen=lim=>Math.max(.15,1-minutos()/lim);
+
+function respirar(){
+  let fase=0,n=0;const paso=()=>{
+    if(modo!=='respirar')return;if(minutos()>20){say('','');return}
+    respFase=fase;respT0=performance.now();respDur=fase?6000:4000;
+    const v=volumen(20),hablar=n<12||n%2===0;      // al inicio guía cada vez, luego cada dos
+    if(fase===0){targetScale=1.14;say('inhala',n<2?'por la nariz, cuatro tiempos':'');if(hablar)susurrar('inhala',v);timer=setTimeout(paso,4000)}
+    else{targetScale=.82;say('suelta',n<2?'despacio, seis tiempos':'');if(hablar)susurrar('suéltalo',v);timer=setTimeout(paso,6000);n++}
+    fase^=1};paso();
+}
+
+const ESCENAS=[
+ ['estás en un bosque','los árboles son altos','la luz entra entre las hojas','huele a tierra mojada','a lo lejos suena un río','caminas despacio','el suelo es blando','hay musgo verde en las piedras','un pájaro canta, una vez','llegas a un claro','el pasto es suave','te recuestas','el sol te calienta la cara'],
+ ['a lo lejos ves una casa de madera','sale humo de la chimenea','te acercas sin apuro','la puerta está abierta','adentro está tibio','hay una manta sobre el sillón','la leña cruje','afuera empieza a llover','las gotas suenan en el techo','te tapas con la manta','todo está en calma'],
+ ['ahora estás junto a un lago en la sierra','el agua está quieta, como un espejo','al fondo hay montañas con nieve','una alpaca come pasto','el aire es fresco','un bote de totora flota','el agua apenas se mueve','nada te apura'],
+ ['ahora estás en una playa','la arena está tibia','las olas van y vienen','el cielo se pone naranja','una brisa suave','huele a sal','las olas siguen','van','y vienen','más despacio']
+];
+let tipo='escena';try{tipo=localStorage.getItem('apaga-tipo')||'escena'}catch(e){}
+const PALABRAS=('vela,pan,bote,lluvia,cuchara,nube,gato,piano,mango,faro,llave,manta,hoja,taza,río,cometa,tambor,pluma,limón,escalera,'+
+'campana,arena,zapato,ventana,caracol,tren,uva,brújula,jabón,montaña,lápiz,abeja,tortuga,globo,canasta,hamaca,huevo,reloj,búho,maceta,'+
+'violín,ancla,choclo,palta,alpaca,muelle,nido,tiza,acordeón,fresa,sombrero,cebolla,bicicleta,sol,piedra,carpa,ola,pera,bufanda,linterna').split(',');
+let ultima='';
+function barajar(){
+  const paso=()=>{if(modo!=='escena'||tipo!=='palabras')return;const m=minutos();if(m>25){say('','');return}
+    let p;do{p=PALABRAS[Math.random()*PALABRAS.length|0]}while(p===ultima);ultima=p;
+    say(p,m<.4?'imagina cada cosa con detalle, sin conectarlas':'');susurrar(p,volumen(25));
+    timer=setTimeout(paso,11000+m*500)};
+  if(!synth)chico.textContent='este navegador no tiene voz; las palabras salen en pantalla';
+  paso();
+}
+function setTipo(t){tipo=t;try{localStorage.setItem('apaga-tipo',t)}catch(e){}
+  $('#t-escena').setAttribute('aria-pressed',t==='escena');$('#t-palabras').setAttribute('aria-pressed',t==='palabras');
+  if(modo==='escena'){stop();modoInicio=Date.now();t==='escena'?escena():barajar()}}
+$('#t-escena').onclick=()=>{audio();setTipo('escena')};$('#t-palabras').onclick=()=>{audio();setTipo('palabras')};
+function escena(){
+  let e=0,i=0;
+  const paso=()=>{if(modo!=='escena'||tipo!=='escena')return;const m=minutos();if(m>25){say('','');return}
+    const frase=ESCENAS[e][i];say(frase,m<.4&&i===0?'cierra los ojos · solo imagina':'');susurrar(frase,volumen(25));
+    i++;if(i>=ESCENAS[e].length){i=0;e=(e+1)%ESCENAS.length;timer=setTimeout(paso,16000+m*500)}
+    else timer=setTimeout(paso,8500+m*400)};
+  if(!synth)chico.textContent='este navegador no tiene voz; la escena sale en pantalla';
+  paso();
+}
+
+let soltados=0;
+$('#soltar-in').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;const v=e.target.value.trim();if(!v)return;e.target.value='';
+  const m=$('main'),r=m.getBoundingClientRect(),f=document.createElement('div');f.className='flota';f.textContent=v;
+  f.style.left='50%';f.style.top='72%';f.style.transform='translate(-50%,0)';m.appendChild(f);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.transform=`translate(-50%,-${r.height*.45}px) scale(.6)`;f.style.opacity=0;f.style.filter='blur(6px)'}));
+  setTimeout(()=>f.remove(),6500);vel+=.08;soltados++;
+  $('#chico2').textContent=soltados===1?'uno menos. ¿otro?':`${soltados} pensamientos soltados`;
+});
+
+function setModo(m){
+  modo=m;stop();modoInicio=Date.now();
+  document.querySelectorAll('.modo').forEach(b=>b.setAttribute('aria-selected',b.dataset.m===m));
+  $('#soltar-box').style.display=m==='soltar'?'flex':'none';$('#texto').style.display=m==='soltar'?'none':'block';
+  if(m==='girar')say('gíralo','despacio o rápido, como te pida el cuerpo');
+  if(m==='respirar')respirar();
+  $('#sub').hidden=m!=='escena';
+  if(m==='escena')setTipo(tipo);
+  if(m==='soltar')setTimeout(()=>$('#soltar-in').focus(),50);
+}
+document.querySelectorAll('.modo').forEach(b=>b.onclick=()=>{audio();wake();setModo(b.dataset.m)});
+setModo('girar');
+
+/* ---------- apagado y viñeta progresivos ---------- */
+const inicio=Date.now();let lastWake=Date.now();
+let reposoT=null;
+function reposo(){document.body.classList.remove('reposo');clearTimeout(reposoT);reposoT=setTimeout(()=>document.body.classList.add('reposo'),4000)}
+reposo();
+function wake(){lastWake=Date.now();reposo();pedirLock();$('#app').style.opacity=1}
+document.addEventListener('pointerdown',()=>{wake();audio()});document.addEventListener('keydown',wake);
+function tickVin(){
+  const total=(Date.now()-inicio)/60000,quieto=(Date.now()-lastWake)/60000;
+  document.documentElement.style.setProperty('--vin',Math.max(38,72-total*1.8)+'%');   // la viñeta se cierra en ~20 min
+  let o=1;if(quieto>2)o=Math.max(.35,1-(quieto-2)*.15);if(total>20)o=Math.min(o,Math.max(0,1-(total-20)*.5));
+  if((modo==='escena'||modo==='respirar')&&Date.now()-lastWake>20000)o=Math.min(o,.1);
+  if(quieto>32)soltarLock();   // tras ~30 min sin tocar, dejamos que el iPhone se bloquee
+  $('#app').style.opacity=o;cv.style.opacity=Math.max(modo==='respirar'?.3:.15,o);
+}
+setInterval(tickVin,5000);tickVin();
+</script>
+
+</body>
+</html>
